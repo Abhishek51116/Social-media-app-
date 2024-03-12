@@ -6,13 +6,22 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { SignupValidation } from "@/lib/validation/index.js";
-import { Link } from "react-router-dom";
+import { Link,useNavigate } from "react-router-dom";
 import Loader from "../../components/shared/Loader";
-import { createUserAccount } from "@/lib/appwrite/api";
+
+import { useToast } from "@/components/ui/use-toast"
+import { useCreateUserAccount, useSignInAccount } from "@/lib/react-query/queriesandMutations";
+import { useUserContext } from "@/context/AuthContext";
+
 
 const SignupForm = () => {
-  //Loading
-  const isLoading = false;
+  const { toast } = useToast()
+  const navigate = useNavigate();
+  const { checkAuthUser, isLoading: isUserLoading } = useUserContext();
+
+  const {mutateAsync: createUserAccount, isPending : isCreatingUser} = useCreateUserAccount(); // nameing mutateAsyn same as it is defined in appwrite api 
+  const {mutateAsync : signInAccount, isPending : isSigningIn } = useSignInAccount();   
+
   const form = useForm<z.infer<typeof SignupValidation>>({
     resolver: zodResolver(SignupValidation),
     defaultValues: {
@@ -28,8 +37,29 @@ const SignupForm = () => {
   const handleSignup = async (values: z.infer<typeof SignupValidation>) => {
     const newUser = await createUserAccount(values);
 
-    console.log(newUser);
-  };
+    if (!newUser) {
+      toast({ title: "Sign up failed. Please try again.", });
+      
+      return;
+    } 
+
+    const session = await signInAccount({
+      email: values.email,
+      password: values.password,
+    });
+
+    const isLoggedIn = await checkAuthUser();
+
+    if (isLoggedIn) {
+      form.reset();
+
+      navigate("/");
+    } else {
+return      toast({ title: "Login failed. Please try again.", });
+
+  }
+
+}
 
   return (
     <Form {...form}>
@@ -103,7 +133,7 @@ const SignupForm = () => {
           />
 
           <Button type="submit" className="shad-button_primary">
-            {isLoading ? (
+            {isCreatingUser ? (
               <div className="flex-center gap-2">
                 <Loader /> Loading...
               </div>
